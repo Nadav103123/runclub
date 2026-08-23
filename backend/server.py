@@ -614,6 +614,12 @@ async def log_run(workout_id: str, body: RunLogIn, user: dict = Depends(get_curr
     w = await db.workouts.find_one({"id": workout_id})
     if not w:
         raise HTTPException(404, "Workout not found")
+    if w["workout_date"] > now_iso():
+        raise HTTPException(400, "You can only log a run after the session has started")
+    membership = await db.memberships.find_one(
+        {"group_id": w["group_id"], "user_id": user["id"], "status": {"$in": ["approved", "admin"]}})
+    if not membership:
+        raise HTTPException(403, "Only group members can log this run")
     pace_secs = body.duration_seconds / body.distance_km
     doc = {
         "workout_id": workout_id,
@@ -956,6 +962,27 @@ async def seed_past_runs():
     logger.info("Seed past runs complete")
 
 
+async def seed_run_logs():
+    """Log the demo account's past runs so Personal Bests / Badges / Leaderboard show real data."""
+    admin = await db.users.find_one({"email": "demo@stridetribe.com"})
+    if not admin:
+        return
+    if await db.run_logs.count_documents({"user_id": admin["id"]}):
+        return
+    now = datetime.now(timezone.utc)
+    past = await db.workouts.find({"created_by": admin["id"], "workout_date": {"$lt": now.isoformat()}}).to_list(500)
+    for w in past:
+        dist = float(w.get("distance_km") or 5.0)
+        pace_secs = fastest_pace_secs(w.get("target_pace") or "") or 330  # 5:30 default
+        await db.run_logs.insert_one({
+            "id": str(uuid.uuid4()), "workout_id": w["id"], "group_id": w["group_id"],
+            "user_id": admin["id"], "distance_km": round(dist, 2),
+            "duration_seconds": int(pace_secs * dist), "pace_secs": pace_secs,
+            "run_date": w["workout_date"], "logged_at": now_iso(),
+        })
+    logger.info("Seed run logs complete")
+
+
 @app.on_event("startup")
 async def startup():
     try:
@@ -967,8 +994,10 @@ async def startup():
         await db.memberships.create_index([("group_id", 1), ("user_id", 1)])
         await db.rsvps.create_index([("workout_id", 1), ("user_id", 1)])
         await db.reminders_sent.create_index([("workout_id", 1), ("user_id", 1), ("window", 1)], unique=True)
+        await db.run_logs.create_index([("workout_id", 1), ("user_id", 1)], unique=True)
         await seed()
         await seed_past_runs()
+        await seed_run_logs()
     except Exception as e:
         logger.warning(f"Startup init: {e}")
     # Background reminder loop

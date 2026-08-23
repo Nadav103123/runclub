@@ -10,6 +10,7 @@ import { Avatar, Button, TextField, StateView } from "@/src/components/ui";
 import { useAuth } from "@/src/AuthContext";
 import { api, uploadImage, resolveImage } from "@/src/api";
 import { Group, User } from "@/src/types";
+import { Badge as BadgeType } from "@/src/types";
 
 export default function Profile() {
   const router = useRouter();
@@ -26,15 +27,18 @@ export default function Profile() {
   const [stats, setStats] = useState<{ total_km: number; total_runs: number; streak_weeks: number; upcoming: number; longest_km: number; best_pace: string | null } | null>(null);
   const [permMsg, setPermMsg] = useState("");
   const [savingPrefs, setSavingPrefs] = useState(false);
+  const [badges, setBadges] = useState<BadgeType[]>([]);
 
   const loadGroups = useCallback(async () => {
     try {
-      const [g, s] = await Promise.all([
+      const [g, s, b] = await Promise.all([
         api.get<Group[]>("/my/groups"),
         api.get<{ total_km: number; total_runs: number; streak_weeks: number; upcoming: number; longest_km: number; best_pace: string | null }>("/my/stats"),
+        api.get<BadgeType[]>("/my/badges"),
       ]);
       setGroups(g);
       setStats(s);
+      setBadges(b);
     } catch {}
   }, []);
 
@@ -194,6 +198,26 @@ export default function Profile() {
         </View>
       )}
 
+      {!editing && badges.length > 0 && (
+        <View style={styles.badgesSection}>
+          <View style={styles.badgesHead}>
+            <Text style={styles.sectionHeading}>ACHIEVEMENTS</Text>
+            <Text style={styles.badgesCount}>{badges.filter((b) => b.earned).length}/{badges.length}</Text>
+          </View>
+          <View style={styles.badgeGrid}>
+            {badges.map((b) => (
+              <View key={b.key} style={[styles.badgeItem, !b.earned && styles.badgeLocked]} testID={`badge-${b.key}`}>
+                <View style={[styles.badgeIcon, b.earned ? styles.badgeIconOn : styles.badgeIconOff]}>
+                  <Ionicons name={(b.earned ? b.icon : "lock-closed") as any} size={22} color={b.earned ? colors.onBrandPrimary : colors.onSurfaceTertiary} />
+                </View>
+                <Text style={[styles.badgeName, !b.earned && { color: colors.onSurfaceTertiary }]} numberOfLines={1}>{b.title}</Text>
+                <Text style={styles.badgeDesc} numberOfLines={2}>{b.desc}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+
       {!editing && (
         <View style={styles.reminderSection}>
           <Text style={styles.sectionHeading}>RUN REMINDERS</Text>
@@ -313,6 +337,17 @@ const styles = StyleSheet.create({
   pbValue: { color: colors.onSurface, fontFamily: fonts.displaySemi, fontSize: font.xl },
   pbLabel: { color: colors.onSurfaceTertiary, fontFamily: fonts.body, fontSize: font.sm },
   reminderSection: { paddingHorizontal: spacing.lg, marginBottom: spacing.lg },
+  badgesSection: { paddingHorizontal: spacing.lg, marginBottom: spacing.lg },
+  badgesHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.md },
+  badgesCount: { color: colors.brand, fontFamily: fonts.bodySemi, fontSize: font.base, backgroundColor: colors.brandTertiary, paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: 999, overflow: "hidden" },
+  badgeGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
+  badgeItem: { width: "30%", alignItems: "center", gap: 4 },
+  badgeLocked: { opacity: 0.55 },
+  badgeIcon: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center", marginBottom: spacing.xs },
+  badgeIconOn: { backgroundColor: colors.brand },
+  badgeIconOff: { backgroundColor: colors.surfaceTertiary },
+  badgeName: { color: colors.onSurface, fontFamily: fonts.bodySemi, fontSize: font.sm, textAlign: "center" },
+  badgeDesc: { color: colors.onSurfaceTertiary, fontFamily: fonts.body, fontSize: 11, textAlign: "center", lineHeight: 14 },
   reminderSub: { color: colors.onSurfaceTertiary, fontFamily: fonts.body, fontSize: font.sm, marginTop: -spacing.sm, marginBottom: spacing.md },
   reminderRow: { flexDirection: "row", gap: spacing.md },
   reminderPill: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, height: 48, borderRadius: radius.md, borderWidth: 1 },

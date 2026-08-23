@@ -26,6 +26,33 @@ export type Session = {
   attendees?: Attendee[];
   group_name?: string;
   is_admin?: boolean;
+  my_log?: RunLog | null;
+};
+
+export type RunLog = {
+  id: string;
+  workout_id?: string;
+  distance_km: number;
+  duration_seconds: number;
+  pace?: string | null;
+  run_date?: string;
+};
+
+export type Badge = {
+  key: string;
+  title: string;
+  desc: string;
+  icon: string;
+  earned: boolean;
+};
+
+export type LeaderRow = {
+  user_id: string;
+  full_name: string;
+  avatar_url?: string | null;
+  km: number;
+  runs: number;
+  rank: number;
 };
 
 export type Group = {

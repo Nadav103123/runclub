@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, FlatList, ActivityIndicator, RefreshControl } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -17,9 +17,11 @@ export default function Calendar() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selected, setSelected] = useState(dayjs().format("YYYY-MM-DD"));
+  const stripRef = useRef<ScrollView>(null);
 
-  // Build a 14-day strip starting today.
-  const days = Array.from({ length: 14 }, (_, i) => dayjs().add(i, "day"));
+  // Strip spans the past week through the next two weeks so runners can log recent runs.
+  const PAST_DAYS = 7;
+  const days = Array.from({ length: 21 }, (_, i) => dayjs().subtract(PAST_DAYS, "day").add(i, "day"));
 
   const load = useCallback(async () => {
     try {
@@ -43,7 +45,13 @@ export default function Calendar() {
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Text style={styles.title}>CALENDAR</Text>
         <Text style={styles.subtitle}>Your committed runs</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.strip}>
+        <ScrollView
+          ref={stripRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.strip}
+          onContentSizeChange={() => stripRef.current?.scrollTo({ x: PAST_DAYS * 64, animated: false })}
+        >
           {days.map((d) => {
             const key = d.format("YYYY-MM-DD");
             const active = key === selected;

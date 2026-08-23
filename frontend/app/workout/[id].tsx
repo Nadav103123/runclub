@@ -64,6 +64,19 @@ export default function WorkoutCoordinator() {
   const lng = w.longitude ?? -122.4194;
   const going = w.my_rsvp === "going";
   const notGoing = w.my_rsvp === "not_going";
+  const isPast = new Date(w.workout_date).getTime() < Date.now();
+
+  const openLog = () => {
+    const params: Record<string, string> = { workoutId: String(id), title: w.title };
+    if (w.my_log) {
+      params.distance = String(w.my_log.distance_km);
+      params.mins = String(Math.floor(w.my_log.duration_seconds / 60));
+      params.secs = String(w.my_log.duration_seconds % 60);
+    } else if (w.distance_km) {
+      params.distance = String(w.distance_km);
+    }
+    router.push({ pathname: "/workout/log", params });
+  };
 
   return (
     <View style={styles.root}>
@@ -134,36 +147,76 @@ export default function WorkoutCoordinator() {
           ) : (
             <Text style={styles.noAttendees}>Be the first to RSVP going!</Text>
           )}
+
+          {w.my_log && (
+            <View style={styles.resultCard} testID="my-run-result">
+              <View style={styles.resultHead}>
+                <Ionicons name="checkmark-done-circle" size={20} color={colors.success} />
+                <Text style={styles.resultTitle}>Your Logged Run</Text>
+              </View>
+              <View style={styles.resultRow}>
+                <View style={styles.resultMetric}>
+                  <Text style={styles.resultValue}>{w.my_log.distance_km}</Text>
+                  <Text style={styles.resultLabel}>KM</Text>
+                </View>
+                <View style={styles.resultMetric}>
+                  <Text style={styles.resultValue}>
+                    {Math.floor(w.my_log.duration_seconds / 60)}:{String(w.my_log.duration_seconds % 60).padStart(2, "0")}
+                  </Text>
+                  <Text style={styles.resultLabel}>TIME</Text>
+                </View>
+                <View style={styles.resultMetric}>
+                  <Text style={styles.resultValue}>{w.my_log.pace}</Text>
+                  <Text style={styles.resultLabel}>PACE</Text>
+                </View>
+              </View>
+            </View>
+          )}
         </ScrollView>
       </View>
 
-      {/* Sticky RSVP */}
-      <View style={[styles.rsvpBar, { paddingBottom: insets.bottom + spacing.sm }]}>
-        <Pressable
-          onPress={() => setRsvp("not_going")}
-          disabled={busy}
-          style={[styles.rsvpBtn, notGoing ? styles.notGoingActive : styles.rsvpIdle]}
-          testID="rsvp-not-going"
-        >
-          <Ionicons name="close-circle" size={18} color={notGoing ? colors.onError : colors.onSurfaceTertiary} />
-          <Text style={[styles.rsvpText, { color: notGoing ? colors.onError : colors.onSurfaceTertiary }]}>Not Going</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => setRsvp("going")}
-          disabled={busy}
-          style={[styles.rsvpBtn, styles.goingBtn, going ? styles.goingActive : styles.goingIdle]}
-          testID="rsvp-going"
-        >
-          {busy ? (
-            <ActivityIndicator color={colors.onSuccess} />
-          ) : (
-            <>
-              <Ionicons name={going ? "checkmark-circle" : "walk"} size={18} color={going ? colors.onSuccess : colors.onBrandPrimary} />
-              <Text style={[styles.rsvpText, { color: going ? colors.onSuccess : colors.onBrandPrimary }]}>{going ? "You're Going" : "I'm Going"}</Text>
-            </>
-          )}
-        </Pressable>
-      </View>
+      {/* Sticky action bar */}
+      {isPast ? (
+        <View style={[styles.rsvpBar, { paddingBottom: insets.bottom + spacing.sm }]}>
+          <Pressable
+            onPress={openLog}
+            style={[styles.rsvpBtn, styles.goingIdle, { flex: 1 }]}
+            testID="log-run-button"
+          >
+            <Ionicons name={w.my_log ? "create" : "add-circle"} size={18} color={colors.onBrandPrimary} />
+            <Text style={[styles.rsvpText, { color: colors.onBrandPrimary }]}>
+              {w.my_log ? "Edit Your Run" : "Log Your Run"}
+            </Text>
+          </Pressable>
+        </View>
+      ) : (
+        <View style={[styles.rsvpBar, { paddingBottom: insets.bottom + spacing.sm }]}>
+          <Pressable
+            onPress={() => setRsvp("not_going")}
+            disabled={busy}
+            style={[styles.rsvpBtn, notGoing ? styles.notGoingActive : styles.rsvpIdle]}
+            testID="rsvp-not-going"
+          >
+            <Ionicons name="close-circle" size={18} color={notGoing ? colors.onError : colors.onSurfaceTertiary} />
+            <Text style={[styles.rsvpText, { color: notGoing ? colors.onError : colors.onSurfaceTertiary }]}>Not Going</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setRsvp("going")}
+            disabled={busy}
+            style={[styles.rsvpBtn, styles.goingBtn, going ? styles.goingActive : styles.goingIdle]}
+            testID="rsvp-going"
+          >
+            {busy ? (
+              <ActivityIndicator color={colors.onSuccess} />
+            ) : (
+              <>
+                <Ionicons name={going ? "checkmark-circle" : "walk"} size={18} color={going ? colors.onSuccess : colors.onBrandPrimary} />
+                <Text style={[styles.rsvpText, { color: going ? colors.onSuccess : colors.onBrandPrimary }]}>{going ? "You're Going" : "I'm Going"}</Text>
+              </>
+            )}
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }
@@ -195,6 +248,13 @@ const styles = StyleSheet.create({
   attendeeChip: { alignItems: "center", gap: spacing.xs, width: 60 },
   attendeeName: { color: colors.onSurfaceSecondary, fontFamily: fonts.body, fontSize: font.sm },
   noAttendees: { color: colors.onSurfaceTertiary, fontFamily: fonts.body, fontSize: font.base },
+  resultCard: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.lg, borderWidth: 1, borderColor: colors.success },
+  resultHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.md },
+  resultTitle: { color: colors.onSurface, fontFamily: fonts.displaySemi, fontSize: font.lg },
+  resultRow: { flexDirection: "row" },
+  resultMetric: { flex: 1, alignItems: "center", gap: 2 },
+  resultValue: { color: colors.onSurface, fontFamily: fonts.display, fontSize: 24 },
+  resultLabel: { color: colors.onSurfaceTertiary, fontFamily: fonts.bodyMedium, fontSize: font.sm },
   rsvpBar: { position: "absolute", left: 0, right: 0, bottom: 0, flexDirection: "row", gap: spacing.md, backgroundColor: colors.surface, paddingHorizontal: spacing.lg, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
   rsvpBtn: { flex: 1, height: 52, borderRadius: radius.md, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, borderWidth: 1 },
   goingBtn: { flex: 1.4 },

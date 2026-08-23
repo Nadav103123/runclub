@@ -6,9 +6,9 @@ import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, fonts, font, radius, CATEGORY_COLORS } from "@/src/theme";
-import { Button, Badge, StateView } from "@/src/components/ui";
+import { Button, Badge, StateView, Avatar } from "@/src/components/ui";
 import { api, resolveImage } from "@/src/api";
-import { Group, Session } from "@/src/types";
+import { Group, Session, LeaderRow } from "@/src/types";
 import { relativeDay, fmtTime } from "@/src/utils/format";
 
 export default function GroupDetails() {
@@ -17,6 +17,7 @@ export default function GroupDetails() {
   const insets = useSafeAreaInsets();
   const [group, setGroup] = useState<Group | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [leaders, setLeaders] = useState<LeaderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [acting, setActing] = useState(false);
@@ -24,12 +25,14 @@ export default function GroupDetails() {
   const load = useCallback(async () => {
     setError(false);
     try {
-      const [g, ws] = await Promise.all([
+      const [g, ws, lb] = await Promise.all([
         api.get<Group>(`/groups/${id}`),
         api.get<Session[]>(`/groups/${id}/workouts`),
+        api.get<LeaderRow[]>(`/groups/${id}/leaderboard`),
       ]);
       setGroup(g);
       setSessions(ws.filter((w) => new Date(w.workout_date) >= new Date(Date.now() - 3600_000)));
+      setLeaders(lb);
     } catch {
       setError(true);
     } finally {
@@ -145,6 +148,26 @@ export default function GroupDetails() {
           </View>
         )}
 
+        {(isMember || isAdmin) && leaders.length > 0 && (
+          <View style={styles.lbSection}>
+            <View style={styles.lbHead}>
+              <Ionicons name="podium" size={18} color={colors.brand} />
+              <Text style={styles.sectionTitle}>THIS WEEK</Text>
+            </View>
+            {leaders.slice(0, 5).map((row) => (
+              <View key={row.user_id} style={styles.lbRow} testID={`leader-${row.user_id}`}>
+                <Text style={[styles.lbRank, row.rank === 1 && { color: colors.brand }]}>{row.rank}</Text>
+                <Avatar uri={resolveImage(row.avatar_url)} name={row.full_name} size={36} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.lbName} numberOfLines={1}>{row.full_name}</Text>
+                  <Text style={styles.lbRuns}>{row.runs} {row.runs === 1 ? "run" : "runs"}</Text>
+                </View>
+                <Text style={styles.lbKm}>{row.km} km</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Sessions */}
         <View style={styles.sessionsHead}>
           <Text style={styles.sectionTitle}>UPCOMING SESSIONS</Text>
@@ -230,6 +253,13 @@ const styles = StyleSheet.create({
   adminActions: { flexDirection: "row", gap: spacing.md, paddingHorizontal: spacing.lg, marginTop: spacing.lg },
   sessionsHead: { paddingHorizontal: spacing.lg, marginTop: spacing.xl, marginBottom: spacing.md },
   sectionTitle: { color: colors.onSurface, fontFamily: fonts.displaySemi, fontSize: font.xl, letterSpacing: 0.5 },
+  lbSection: { paddingHorizontal: spacing.lg, marginTop: spacing.xl, gap: spacing.sm },
+  lbHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.xs },
+  lbRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.sm, paddingHorizontal: spacing.md, borderWidth: 1, borderColor: colors.border },
+  lbRank: { width: 20, textAlign: "center", color: colors.onSurfaceTertiary, fontFamily: fonts.display, fontSize: font.xl },
+  lbName: { color: colors.onSurface, fontFamily: fonts.bodySemi, fontSize: font.lg },
+  lbRuns: { color: colors.onSurfaceTertiary, fontFamily: fonts.body, fontSize: font.sm },
+  lbKm: { color: colors.brand, fontFamily: fonts.displaySemi, fontSize: font.xl },
   sessionCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
   dateChip: { width: 70, alignItems: "center", backgroundColor: colors.surfaceTertiary, borderRadius: radius.sm, paddingVertical: spacing.sm, gap: 2 },
   dateChipDay: { color: colors.brand, fontFamily: fonts.bodySemi, fontSize: font.sm },

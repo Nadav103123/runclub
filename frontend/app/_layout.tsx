@@ -103,6 +103,7 @@ function RootNavigator() {
       <Stack.Screen name="group/members/[id]" />
       <Stack.Screen name="workout/[id]" />
       <Stack.Screen name="workout/create" options={{ presentation: "modal" }} />
+      <Stack.Screen name="workout/log" options={{ presentation: "modal" }} />
     </Stack>
   );
 }

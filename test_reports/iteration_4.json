@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 4 (Post-Run Logging + Achievement Badges + Group Weekly Leaderboard) reviewed end-to-end. Backend: 15/15 iteration-4 pytest PASSED (100%). Full suite: 66/67 PASSED — the 1 failure is the known-stale iter-2 register_push_controlled_error test (already flagged in iter-3 report; endpoint is now auth-gated so 401 is correct). Verified: (1) POST /api/workouts/{id}/log validates distance_km>0 & duration_seconds>0 (Pydantic 422), 404 on unknown workout, correctly computes pace (duration/distance) and returns 'M:SS'; a second POST UPSERTS the same run_logs record (same id) and updates values — enforced by unique index on (workout_id,user_id). (2) GET /api/workouts/{id} returns my_log scoped to the caller (demo sees None on new_user's log, new_user sees own). (3) Stats derive from run_logs: demo shows total_km=41.0, total_runs=4, longest_km=18.0, best_pace='4:00', streak_weeks>=1; a fresh user has zeros/null; after logging 6km/30min stats jump to total_runs=1, total_km=6.0, longest=6.0, best='5:00'; after upsert to 10km/40min → total_runs still 1, total_km=10.0, longest=10.0, best='4:00'. (4) Badges: 7 total; demo has first_run+ten_k+speedster+social earned, half/century/streak4 locked; new user has none; new user earns first_run immediately after logging. (5) Leaderboard: GET /api/groups/{id}/leaderboard returns members ranked by last-7d km desc with rank; two-member test group shows new_user rank 1 (10 km) and demo rank 2 (0 km); Dawn Patrol Runners shows Alex Rivera rank 1 with km>0 (7d window catches -3d and -6d seed logs). (6) Cancel /api/workouts/{id} deletes associated run_logs (verified stats fall back to zero for new_user). (7) Regression: search 'oakland' (city vibe), 'marathon' (category vibe), 'headlands' (description vibe) all match; reminder_prefs PUT whitelisting drops 'bogus'; /register-push requires auth (401 without token). Frontend (390x844): Profile shows PERSONAL BESTS (18 km / 4:00) and ACHIEVEMENTS 4/7 grid with First Steps, 10K Club, Speed Demon earned + Half Marathon, Century, On Fire locked (icons + labels correct). Group detail page shows THIS WEEK leaderboard card with rank + avatar + km. Console still shows deprecated RN-Web 'shadow*' + 'props.pointerEvents' warnings — pre-existing.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/workouts/{id}/log", "issue": "No check that run_date is in the past — a user can log a future workout. Consider rejecting logs for workouts whose workout_date > now (or at least warning). Currently a bug-abuse vector for gaming badges/leaderboard."},
+      {"endpoint": "POST /api/workouts/{id}/log", "issue": "No membership check — any authenticated user can log a run against a workout in a group they don't belong to (since GET /workouts/{id} isn't gated either). Consider requiring approved/admin membership."},
+      {"endpoint": "GET /api/groups/{id}/leaderboard", "issue": "run_date is stored as ISO string; comparing to another ISO string via $gte works only because the format is lexicographically sortable. Fine today but fragile if timezone offsets ever differ per row. Consider storing as native datetime."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "global", "issues": ["Pre-existing RN-Web warnings: 'shadow*' → boxShadow, 'props.pointerEvents' → style.pointerEvents. Non-blocking."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_4.py",
+    "/app/test_reports/pytest/iteration_4_results.xml"
+  ],
+  "action_items": [
+    "(LOW) Reject POST /api/workouts/{id}/log when workout_date > now to prevent logging future runs.",
+    "(LOW) Require approved/admin membership on POST /api/workouts/{id}/log and consider gating GET /api/workouts/{id} the same way — currently any authed user can view/log any workout.",
+    "(HOUSEKEEPING) Remove or update stale /app/backend/tests/test_iteration_2.py::TestRegisterPush::test_register_push_controlled_error — endpoint was auth-gated in iter-3; assertion still expects 500/502 but now sees 401. Same action was recommended in iter-3 report and remains unfixed.",
+    "(Pre-existing) Migrate RN-Web deprecated 'shadow*' and 'props.pointerEvents' props."
+  ],
+  "critical_code_review_comments": [
+    "server.py:612 log_run creates unique index (workout_id,user_id) so upsert semantics are enforced at the DB level — nice. Handles both branches (existing vs new) explicitly and returns the same id on update, which the frontend log page relies on for the Edit flow.",
+    "server.py:840 leaderboard filters logs by (group_id,user_id,run_date>=week_start) then sums client-side. Sort is stable via list.sort(). Rank is assigned by index — ties get sequential ranks (not competition ranking); acceptable for MVP but worth noting.",
+    "server.py:807 badges route recomputes stats independently instead of calling my_stats — duplicate logic (~15 lines) with /my/stats. Consider extracting a helper to keep them in sync.",
+    "server.py:589 cancel_workout correctly cascades run_logs deletion; rsvps also deleted. Reminders_sent NOT cleaned up though — could leave orphan dedupe records; harmless but grows unbounded.",
+    "server.py:625 log_run stores run_date = workout_date, so leaderboard's 7d window is anchored to when the session was scheduled, not when the user actually ran. Reasonable trade-off but be aware if you later allow logging retroactively.",
+    "workout/[id].tsx isPast check uses Date.now() vs workout_date; renders 'Log/Edit Your Run' CTA which routes to /workout/log with pre-filled distance/mins/secs when my_log exists — good UX for edits.",
+    "workout/log.tsx client-side validates distance>0 AND total>0 before POST; backend also enforces via Pydantic gt=0. Belt+suspenders."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration_4.py (created)"],
+  "success_rate": {"backend": "100% (15/15 iter-4; 66/67 full suite — 1 known-stale iter-2 test)", "frontend": "100%"},
+  "seed_data_creation": "No permanent seed created. All TEST_iter4 groups/users/workouts/run_logs cleaned up after run. Final DB state: 1 demo user, 5 seeded groups, 5 admin memberships, 4 seeded run_logs, 8 workouts (4 past + 4 upcoming), 4 rsvps — matches the pristine demo baseline requested by main agent.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter-4 pytest lives at /app/backend/tests/test_iteration_4.py. Run with `-n0` (serial) because TestPostRunLogging and TestZzzCleanup share class-level ids and xdist LoadScope splits them across workers otherwise. Backend URL from frontend/.env EXPO_PUBLIC_BACKEND_URL. Demo: demo@stridetribe.com/Password123. Frontend testIDs added this iteration: log-run-button, log-close, log-distance-input, log-minutes-input, log-seconds-input, submit-log-button, log-error, my-run-result. Push delivery still not testable (placeholder EMERGENT_PUSH_KEY) — verify only contracts, not delivery. Stale test remaining: test_iteration_2.py::test_register_push_controlled_error (asserts 500/502 but endpoint is auth-gated → 401).",
+  "rca_of_issue": "N/A — all iteration-4 acceptance criteria met."
+}

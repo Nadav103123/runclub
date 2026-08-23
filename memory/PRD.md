@@ -52,6 +52,14 @@ Build a mobile-first social running community app "Stride Tribe" enabling runner
 - [x] Hardening: reminder_prefs whitelist validation, unique index on reminders_sent
 - [x] 51/52 backend tests pass (1 stale iter-2 push test needs auth header — not a regression)
 
+## Implemented — Iteration 4 (2026-06)
+- [x] Post-Run Logging: `POST /api/workouts/{id}/log` (upsert, computes pace); guarded (members only, no future dates); `my_log` in workout detail; "Log/Edit Your Run" CTA on past sessions + "Your Logged Run" card; Calendar strip spans -7..+14 days to reach past sessions
+- [x] Stats/Personal Bests now derive from real logged runs (`run_logs` collection)
+- [x] Achievement Badges: `GET /api/my/badges` (7 milestones) + Profile ACHIEVEMENTS grid (earned/locked)
+- [x] Group Weekly Leaderboard: `GET /api/groups/{id}/leaderboard` (last-7-day km, ranked) + THIS WEEK card on Group Details for members/admin
+- [x] Seeded demo run logs so bests/badges/leaderboard show real data
+- [x] 66/67 backend tests pass (1 stale iter-2 test); hardening: log membership + future-date guards
+
 ## Backlog
 ### P1
 - Push notifications for session reminders & join approvals (native build only)
