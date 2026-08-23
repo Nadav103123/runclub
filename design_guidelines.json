@@ -1,0 +1,161 @@
+{
+  "app_name": "Stride Tribe",
+  "personality": "7 Dark-First Utility",
+  "personality_one_liner": "A high-energy, performance-driven dark UI that feels athletic, reactive, and built for speed.",
+  "color": {
+    "surface": "#101115",
+    "onSurface": "#FFFFFF",
+    "surfaceSecondary": "#1C1D24",
+    "onSurfaceSecondary": "#E0E0E0",
+    "surfaceTertiary": "#262831",
+    "onSurfaceTertiary": "#A0A0A5",
+    "surfaceInverse": "#FFFFFF",
+    "onSurfaceInverse": "#101115",
+    "brand": "#FF4D00",
+    "brandPrimary": "#FF4D00",
+    "onBrandPrimary": "#101115",
+    "brandSecondary": "#CC3D00",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "rgba(255, 77, 0, 0.15)",
+    "onBrandTertiary": "#FF4D00",
+    "success": "#00E676",
+    "onSuccess": "#101115",
+    "warning": "#FFC400",
+    "onWarning": "#101115",
+    "error": "#FF1744",
+    "onError": "#FFFFFF",
+    "border": "#2A2C35",
+    "borderStrong": "#3E414F",
+    "divider": "#2A2C35"
+  },
+  "typography": {
+    "displayFontFamily": "Barlow Condensed",
+    "textFontFamily": "IBM Plex Sans",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Dense but scannable hierarchy. Limit padding on data-heavy elements but ensure touch targets are robust. Maintain 16pt page gutters.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "0",
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": "false",
+    "do's": [
+      "Use solid surfaceSecondary or surfaceTertiary for elevation."
+    ],
+    "dont's": [
+      "No blur or glassmorphism on this personality. Use color shifts and dividers."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "solid surfaceSecondary",
+      "android": "solid surfaceSecondary",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "DiscoveryFeed",
+      "purpose": "Find local running groups with horizontal fast-filters (City, Pace, Day).",
+      "states": {
+        "loading": "Skeleton cards with pulsating surfaceTertiary elements.",
+        "empty": "Illustration of a track and 'No groups match your filters' with a 'Clear Filters' button.",
+        "error": "Error icon, 'Unable to load groups', Retry button."
+      },
+      "layout": "Sticky header with horizontal scrollable filter chips (City, Pace, Category) sitting above a vertical list of group cards. Group cards feature a cover image, gradient scrim, strong Barlow Condensed title, and next session metadata stacked compactly."
+    },
+    {
+      "name": "GroupDetails",
+      "purpose": "View group info, check membership status, and see upcoming sessions.",
+      "states": {
+        "loading": "Centered brand-colored spinner.",
+        "empty": "No sessions upcoming illustration.",
+        "error": "Failed to load group details error message."
+      },
+      "layout": "Hero image banner with top-to-bottom gradient scrim. Large title overlaid. Underneath, a sticky membership action button (Request/Join). Below: segmented stats (Members, Pace, Type) and a vertical list of 'Upcoming Sessions' cards."
+    },
+    {
+      "name": "WorkoutCoordinator",
+      "purpose": "Map-based view of the workout location, route info, and RSVP status.",
+      "states": {
+        "loading": "Map skeleton/loading overlay.",
+        "empty": "No workout selected.",
+        "error": "Map load failure or session deleted."
+      },
+      "layout": "Full-bleed map background displaying the meeting pin. Bottom sheet (surfaceSecondary) containing the session title, date/time, distance (km), pace, and a sticky state-aware RSVP button (Going/Not Going/Full). A horizontal avatar stack shows participating runners."
+    },
+    {
+      "name": "WeeklyCalendar",
+      "purpose": "A 7-day strip calendar showing the user's committed runs and activities.",
+      "states": {
+        "loading": "Loading calendar days.",
+        "empty": "No runs scheduled this week. 'Find a group' CTA.",
+        "error": "Failed to load calendar data."
+      },
+      "layout": "Top section features a horizontally scrollable 7-day date strip. Selecting a date updates the vertical list below, displaying detailed session cards for that day. High-contrast selected date styling (brand primary background)."
+    },
+    {
+      "name": "UserProfile",
+      "purpose": "Manage identity, bio, target pace, and view joined communities.",
+      "states": {
+        "loading": "Loading profile data.",
+        "empty": "N/A - User data is always present.",
+        "error": "Failed to load profile."
+      },
+      "layout": "Avatar and user stats at the top. Form fields (read-only or editable) for Target Pace and Location. Below, a 'My Groups' horizontal shelf showing mini-cards of joined communities."
+    }
+  ],
+  "images": {
+    "group_cover_urban": {
+      "url": "https://images.pexels.com/photos/19146676/pexels-photo-19146676.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Urban running group on track at night"
+    },
+    "group_cover_trail": {
+      "url": "https://images.pexels.com/photos/32798744/pexels-photo-32798744.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Trail running in the forest"
+    },
+    "avatar_user": {
+      "url": "https://images.pexels.com/photos/3763862/pexels-photo-3763862.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Athlete portrait"
+    },
+    "map_bg": {
+      "url": "https://images.unsplash.com/photo-1544411047-c491e34a24e0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzB8MHwxfHNlYXJjaHwxfHxkYXJrJTIwdmVjdG9yJTIwbWFwJTIwY2l0eXxlbnwwfHx8fDE3ODc0ODQ3MjZ8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Dark mode city map background"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the Dark-First Utility personality (7) principles: use deep carbon grey/obsidian backgrounds (#101115) instead of pure black, with a high-energy Signal Red/Orange (#FF4D00) primary brand accent.",
+    "Do NOT use glassmorphism or blur effects for this personality. Use solid tonal layers (surfaceSecondary, surfaceTertiary) and dividers to establish hierarchy.",
+    "Use Barlow Condensed for all display headings, oversized metrics, and key data points. Use IBM Plex Sans for body text.",
+    "Ensure all primary CTAs are sticky above the home indicator, especially the state-aware RSVP button on the WorkoutCoordinator and the Membership button on GroupDetails.",
+    "Always apply a vertical top-to-bottom gradient scrim (transparent to surfaceInverse >= 70%) on image covers when text is overlaid.",
+    "For the Map UI on WorkoutCoordinator, use the provided map_bg image. Layer a bottom sheet (using @gorhom/bottom-sheet or a static view with pan gestures) over it for the session details.",
+    "Web Search Insights: Discovery feeds must utilize clear, horizontally scrollable filter chips (City, Pace, Vibe). RSVP buttons must be state-aware (Booked, Full, Open) and include social proof like 'Spots left' or 'Attendees'. Ensure the weekly calendar uses a 7-day horizontal strip pattern for quick navigation."
+  ]
+}

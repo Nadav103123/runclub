@@ -1,0 +1,48 @@
+{
+  "summary": "Iteration 2 review of Stride Tribe: 3 new features + regression. Backend: 37/37 pytest PASSED (100%) — 11 new iter-2 tests + 26 regression tests. Verified: (1) GET /api/groups?search=... is case-insensitive substring on name and composes correctly with city/category/day filters; (2) GET /api/my/stats returns {total_km, total_runs, streak_weeks, upcoming} — demo user: total_runs=4, total_km=41.0, streak_weeks>=1 (measured 2), upcoming>0; new user: all zeros; (3) POST /api/register-push with placeholder EMERGENT_PUSH_KEY returns a controlled 500/502 JSON error (not a crash) and backend remains healthy for subsequent requests; (4) POST /api/groups/{id}/workouts still returns 200 and persists the workout even though push relay is unavailable (wrapped in try/except). Frontend (390x844 mobile): Discover search input filters live and clears; empty state renders for no matches; Profile page renders three Run Stats tiles (Week Streak=2, Total KM=41, Runs Done=4) for the demo user. No red-screen errors, no new crashes. Console warnings still show deprecated RN-Web props ('shadow*', 'props.pointerEvents') — pre-existing, non-blocking.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/groups?search", "issue": "Search term is inserted into a MongoDB $regex without escaping. A user typing regex metacharacters like '(', '[', or '\\\\' will trigger a PCRE parse error and MongoDB may return 500. Consider re.escape() (Python) or a safe wrapper before building the {'$regex': ...} clause."},
+      {"endpoint": "POST /api/register-push", "issue": "Endpoint is un-authenticated — anyone can POST arbitrary {user_id, platform, device_token} and pollute the push provider mapping. Should require Depends(get_current_user) and use user['id'] instead of trusting client-supplied user_id."},
+      {"endpoint": "POST /api/register-push", "issue": "When httpx.HTTPStatusError is raised via resp.raise_for_status() for 4xx (e.g. 400/403 from provider), it will bubble as a 500 with no context. Consider catching and mapping to 502 like the 5xx branch."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "global", "issues": ["Pre-existing RN-Web console warnings: 'shadow*' style props deprecated (use boxShadow); 'props.pointerEvents' deprecated (use style.pointerEvents). Non-blocking."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_2.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/iteration_2_results.xml",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(Optional/HIGH) Escape user-supplied 'search' before building $regex in list_groups(). E.g. import re; q['name'] = {'$regex': re.escape(search), '$options': 'i'}. Otherwise regex-syntax input can crash the query.",
+    "(HIGH) Require auth on POST /api/register-push and derive user_id from the JWT instead of the request body — currently anyone can register device tokens for arbitrary user IDs.",
+    "(Optional) Map 4xx from push provider to a 502 (or 400) with a clear detail so the client can distinguish 'push provider unavailable' from 'bad request'.",
+    "(Optional, pre-existing) Migrate RN-Web deprecated 'shadow*' props to 'boxShadow' and 'props.pointerEvents' to 'style.pointerEvents'."
+  ],
+  "critical_code_review_comments": [
+    "server.py: New /my/stats correctly excludes _id (dict-comprehension response), uses ISO-week bucketing, and only counts RSVP=going + workout_date<=now — matches acceptance spec.",
+    "server.py: New-session push in create_workout is wrapped in try/except that also catches non-200 upstream errors — verified in tests that workout persistence is unaffected by push failures.",
+    "server.py: send_push chunks recipients in batches of 100 with idempotency keys — good.",
+    "server.py: reminder_scheduler flips reminder_sent=True BEFORE attempting to send push. If send_push raises, the flag stays True and the reminder is silently lost. Consider setting the flag AFTER successful send, or on a separate 'attempted' counter.",
+    "server.py: _push_client is a module-level httpx.AsyncClient — good reuse; but it is never closed on shutdown. Consider awaiting _push_client.aclose() in the shutdown handler.",
+    "server.py: /register-push does not verify JWT — see action_items.",
+    "server.py: search regex uses raw user input — see action_items.",
+    "frontend push.ts: Correctly no-ops on web (Platform.OS === 'web') and swallows errors — good for Expo Go preview."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration_2.py (created)"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "seed_past_runs() is idempotent (guarded by count of past workouts). Confirmed demo user has 4 completed runs @ 5+8+18+10 = 41km. Test suite creates TEST_-prefixed users/workouts/groups but does not clean up.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend base URL: https://pace-finder-1.preview.emergentagent.com from EXPO_PUBLIC_BACKEND_URL. Demo login demo@stridetribe.com / Password123. Iteration-2 pytest at /app/backend/tests/test_iteration_2.py — covers search, /my/stats, /register-push, and the non-blocking push side-effect on create_workout. Regression suite at /app/backend/tests/backend_test.py. Frontend testIDs of note: login-email-input, login-password-input, login-submit-button, group-search-input, cat-*, city-*, day-*. Profile Run Stats tiles have labels 'Week Streak', 'Total KM', 'Runs Done' (no dedicated testIDs).",
+  "rca_of_issue": "N/A — all acceptance criteria met. Two hardening issues surfaced during code review (see action_items): (a) unescaped regex in /api/groups?search allows crafted input to trigger a MongoDB query error; (b) /api/register-push accepts arbitrary user_id without authentication."
+}
