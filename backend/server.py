@@ -139,6 +139,11 @@ class RegisterPushBody(BaseModel):
     device_token: str
 
 
+class RunLogIn(BaseModel):
+    distance_km: float = Field(gt=0, le=1000)
+    duration_seconds: int = Field(gt=0, le=86400)
+
+
 # ---------------------------------------------------------------- auth helpers
 def hash_password(pw: str) -> str:
     return bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
@@ -319,6 +324,33 @@ def workout_public(w: dict, going_count=0, my_rsvp=None, attendees=None) -> dict
         "going_count": going_count,
         "my_rsvp": my_rsvp,
         "attendees": attendees or [],
+    }
+
+
+def fmt_pace(secs) -> Optional[str]:
+    if not secs:
+        return None
+    secs = int(round(secs))
+    return f"{secs // 60}:{secs % 60:02d}"
+
+
+def fastest_pace_secs(target_pace: str):
+    best = None
+    for mm, ss in re.findall(r"(\d+):(\d{2})", target_pace or ""):
+        s = int(mm) * 60 + int(ss)
+        if best is None or s < best:
+            best = s
+    return best
+
+
+def log_public(log: dict) -> dict:
+    return {
+        "id": log["id"],
+        "workout_id": log.get("workout_id"),
+        "distance_km": log["distance_km"],
+        "duration_seconds": log["duration_seconds"],
+        "pace": fmt_pace(log.get("pace_secs")),
+        "run_date": log.get("run_date"),
     }
 
 
@@ -541,6 +573,8 @@ async def get_workout(workout_id: str, user: dict = Depends(get_current_user)):
     result = workout_public(w, going_count=going, my_rsvp=mine["status"] if mine else None, attendees=attendees)
     result["group_name"] = g["name"] if g else ""
     result["is_admin"] = bool(g and g["admin_id"] == user["id"])
+    my_log = await db.run_logs.find_one({"workout_id": workout_id, "user_id": user["id"]})
+    result["my_log"] = log_public(my_log) if my_log else None
     return result
 
 
@@ -552,6 +586,7 @@ async def cancel_workout(workout_id: str, user: dict = Depends(get_current_user)
     await require_admin(w["group_id"], user)
     await db.workouts.delete_one({"id": workout_id})
     await db.rsvps.delete_many({"workout_id": workout_id})
+    await db.run_logs.delete_many({"workout_id": workout_id})
     return {"status": "cancelled"}
 
 
@@ -572,6 +607,32 @@ async def rsvp(workout_id: str, body: RSVPIn, user: dict = Depends(get_current_u
         })
     going = await db.rsvps.count_documents({"workout_id": workout_id, "status": "going"})
     return {"status": body.status, "going_count": going}
+
+
+@api_router.post("/workouts/{workout_id}/log")
+async def log_run(workout_id: str, body: RunLogIn, user: dict = Depends(get_current_user)):
+    w = await db.workouts.find_one({"id": workout_id})
+    if not w:
+        raise HTTPException(404, "Workout not found")
+    pace_secs = body.duration_seconds / body.distance_km
+    doc = {
+        "workout_id": workout_id,
+        "group_id": w["group_id"],
+        "user_id": user["id"],
+        "distance_km": round(body.distance_km, 2),
+        "duration_seconds": body.duration_seconds,
+        "pace_secs": pace_secs,
+        "run_date": w["workout_date"],
+        "logged_at": now_iso(),
+    }
+    existing = await db.run_logs.find_one({"workout_id": workout_id, "user_id": user["id"]})
+    if existing:
+        await db.run_logs.update_one({"id": existing["id"]}, {"$set": doc})
+        doc["id"] = existing["id"]
+    else:
+        doc["id"] = str(uuid.uuid4())
+        await db.run_logs.insert_one(doc)
+    return log_public(doc)
 
 
 @api_router.get("/my/calendar")
@@ -686,32 +747,30 @@ async def reminder_scheduler():
 async def my_stats(user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     now_s = now.isoformat()
-    rsvps = await db.rsvps.find({"user_id": user["id"], "status": "going"}).to_list(2000)
-    wids = [r["workout_id"] for r in rsvps]
+    logs = await db.run_logs.find({"user_id": user["id"]}).to_list(5000)
     total_km = 0.0
-    total_runs = 0
-    upcoming = 0
     longest_km = 0.0
     best_pace_secs = None
     weeks = set()
+    for lg in logs:
+        dist = float(lg.get("distance_km") or 0)
+        total_km += dist
+        if dist > longest_km:
+            longest_km = dist
+        ps = lg.get("pace_secs")
+        if ps and (best_pace_secs is None or ps < best_pace_secs):
+            best_pace_secs = ps
+        try:
+            iso = datetime.fromisoformat(lg.get("run_date") or lg["logged_at"]).isocalendar()
+            weeks.add((iso[0], iso[1]))
+        except Exception:
+            pass
+    total_runs = len(logs)
+    # upcoming = future sessions the user is going to
+    rsvps = await db.rsvps.find({"user_id": user["id"], "status": "going"}).to_list(2000)
+    wids = [r["workout_id"] for r in rsvps]
+    upcoming = 0
     if wids:
-        completed = await db.workouts.find({"id": {"$in": wids}, "workout_date": {"$lte": now_s}}).to_list(2000)
-        for w in completed:
-            total_runs += 1
-            dist = float(w.get("distance_km") or 0)
-            total_km += dist
-            if dist > longest_km:
-                longest_km = dist
-            for mm, ss in re.findall(r"(\d+):(\d{2})", w.get("target_pace") or ""):
-                secs = int(mm) * 60 + int(ss)
-                if best_pace_secs is None or secs < best_pace_secs:
-                    best_pace_secs = secs
-            try:
-                d = datetime.fromisoformat(w["workout_date"])
-                iso = d.isocalendar()
-                weeks.add((iso[0], iso[1]))
-            except Exception:
-                pass
         upcoming = await db.workouts.count_documents({"id": {"$in": wids}, "workout_date": {"$gt": now_s}})
     # weekly streak (current in-progress week doesn't break it)
     streak = 0
@@ -730,8 +789,76 @@ async def my_stats(user: dict = Depends(get_current_user)):
         "streak_weeks": streak,
         "upcoming": upcoming,
         "longest_km": round(longest_km, 1),
-        "best_pace": f"{best_pace_secs // 60}:{best_pace_secs % 60:02d}" if best_pace_secs else None,
+        "best_pace": fmt_pace(best_pace_secs),
     }
+
+
+BADGE_DEFS = [
+    {"key": "first_run", "title": "First Steps", "desc": "Log your first run", "icon": "walk"},
+    {"key": "ten_k", "title": "10K Club", "desc": "Finish a 10 km run", "icon": "ribbon"},
+    {"key": "half", "title": "Half Marathon", "desc": "Run 21.1 km in one go", "icon": "medal"},
+    {"key": "century", "title": "Century Club", "desc": "Log 100 total km", "icon": "trophy"},
+    {"key": "speedster", "title": "Speed Demon", "desc": "Hit a sub-4:30 pace", "icon": "flash"},
+    {"key": "streak4", "title": "On Fire", "desc": "4-week running streak", "icon": "flame"},
+    {"key": "social", "title": "Tribe Builder", "desc": "Join 3 running groups", "icon": "people"},
+]
+
+
+@api_router.get("/my/badges")
+async def my_badges(user: dict = Depends(get_current_user)):
+    logs = await db.run_logs.find({"user_id": user["id"]}).to_list(5000)
+    total_km = sum(float(l.get("distance_km") or 0) for l in logs)
+    longest = max([float(l.get("distance_km") or 0) for l in logs], default=0)
+    best = min([l["pace_secs"] for l in logs if l.get("pace_secs")], default=None)
+    weeks = set()
+    for lg in logs:
+        try:
+            iso = datetime.fromisoformat(lg.get("run_date") or lg["logged_at"]).isocalendar()
+            weeks.add((iso[0], iso[1]))
+        except Exception:
+            pass
+    now = datetime.now(timezone.utc)
+    streak = 0
+    cur_iso = now.isocalendar()
+    cur = now if (cur_iso[0], cur_iso[1]) in weeks else now - timedelta(days=7)
+    while (cur.isocalendar()[0], cur.isocalendar()[1]) in weeks:
+        streak += 1
+        cur = cur - timedelta(days=7)
+    groups_count = await db.memberships.count_documents({"user_id": user["id"], "status": {"$in": ["approved", "admin"]}})
+    earned = {
+        "first_run": len(logs) >= 1,
+        "ten_k": longest >= 10,
+        "half": longest >= 21.1,
+        "century": total_km >= 100,
+        "speedster": best is not None and best <= 270,
+        "streak4": streak >= 4,
+        "social": groups_count >= 3,
+    }
+    return [{**b, "earned": earned.get(b["key"], False)} for b in BADGE_DEFS]
+
+
+@api_router.get("/groups/{group_id}/leaderboard")
+async def group_leaderboard(group_id: str, user: dict = Depends(get_current_user)):
+    members = await db.memberships.find({"group_id": group_id, "status": {"$in": ["approved", "admin"]}}).to_list(1000)
+    week_start = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    rows = []
+    for m in members:
+        u = await db.users.find_one({"id": m["user_id"]})
+        if not u:
+            continue
+        logs = await db.run_logs.find({
+            "group_id": group_id, "user_id": m["user_id"], "run_date": {"$gte": week_start},
+        }).to_list(500)
+        km = round(sum(float(l.get("distance_km") or 0) for l in logs), 1)
+        rows.append({
+            "user_id": u["id"], "full_name": u.get("full_name", ""),
+            "avatar_url": u.get("avatar_url"), "km": km, "runs": len(logs),
+        })
+    rows.sort(key=lambda r: r["km"], reverse=True)
+    for i, r in enumerate(rows):
+        r["rank"] = i + 1
+    return rows
+
 
 
 # ---------------------------------------------------------------- seed
