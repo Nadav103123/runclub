@@ -6,6 +6,7 @@ export type User = {
   bio?: string;
   location?: string;
   pace_min_km?: string;
+  reminder_prefs?: string[];
 };
 
 export type Session = {

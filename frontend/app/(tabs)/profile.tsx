@@ -23,19 +23,34 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [groups, setGroups] = useState<Group[]>([]);
-  const [stats, setStats] = useState<{ total_km: number; total_runs: number; streak_weeks: number; upcoming: number } | null>(null);
+  const [stats, setStats] = useState<{ total_km: number; total_runs: number; streak_weeks: number; upcoming: number; longest_km: number; best_pace: string | null } | null>(null);
   const [permMsg, setPermMsg] = useState("");
+  const [savingPrefs, setSavingPrefs] = useState(false);
 
   const loadGroups = useCallback(async () => {
     try {
       const [g, s] = await Promise.all([
         api.get<Group[]>("/my/groups"),
-        api.get<{ total_km: number; total_runs: number; streak_weeks: number; upcoming: number }>("/my/stats"),
+        api.get<{ total_km: number; total_runs: number; streak_weeks: number; upcoming: number; longest_km: number; best_pace: string | null }>("/my/stats"),
       ]);
       setGroups(g);
       setStats(s);
     } catch {}
   }, []);
+
+  const toggleReminder = async (key: string) => {
+    if (!user) return;
+    const current = user.reminder_prefs || ["1d", "1h"];
+    const next = current.includes(key) ? current.filter((x) => x !== key) : [...current, key];
+    setSavingPrefs(true);
+    try {
+      const updated = await api.put<User>("/auth/profile", { reminder_prefs: next });
+      setUser(updated);
+    } catch {}
+    finally {
+      setSavingPrefs(false);
+    }
+  };
 
   useFocusEffect(useCallback(() => { loadGroups(); refreshUser(); }, [loadGroups]));
 
@@ -157,6 +172,55 @@ export default function Profile() {
         </View>
       )}
 
+      {!editing && stats && (stats.total_runs > 0) && (
+        <View style={styles.pbSection}>
+          <Text style={styles.sectionHeading}>PERSONAL BESTS</Text>
+          <View style={styles.pbRow}>
+            <View style={styles.pbCard}>
+              <View style={styles.pbIcon}><Ionicons name="trending-up" size={20} color={colors.brand} /></View>
+              <View>
+                <Text style={styles.pbValue}>{stats.longest_km} km</Text>
+                <Text style={styles.pbLabel}>Longest Run</Text>
+              </View>
+            </View>
+            <View style={styles.pbCard}>
+              <View style={styles.pbIcon}><Ionicons name="flash" size={20} color={colors.brand} /></View>
+              <View>
+                <Text style={styles.pbValue}>{stats.best_pace ? `${stats.best_pace}` : "—"}</Text>
+                <Text style={styles.pbLabel}>Best Pace min/km</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {!editing && (
+        <View style={styles.reminderSection}>
+          <Text style={styles.sectionHeading}>RUN REMINDERS</Text>
+          <Text style={styles.reminderSub}>Get nudged before sessions you're going to</Text>
+          <View style={styles.reminderRow}>
+            {[
+              { key: "1d", label: "Day before", icon: "calendar-outline" as const },
+              { key: "1h", label: "Hour before", icon: "time-outline" as const },
+            ].map((opt) => {
+              const on = (user.reminder_prefs || ["1d", "1h"]).includes(opt.key);
+              return (
+                <Pressable
+                  key={opt.key}
+                  disabled={savingPrefs}
+                  onPress={() => toggleReminder(opt.key)}
+                  style={[styles.reminderPill, on ? styles.reminderOn : styles.reminderOff]}
+                  testID={`reminder-toggle-${opt.key}`}
+                >
+                  <Ionicons name={on ? "checkmark-circle" : opt.icon} size={18} color={on ? colors.onBrandPrimary : colors.onSurfaceTertiary} />
+                  <Text style={[styles.reminderText, { color: on ? colors.onBrandPrimary : colors.onSurfaceSecondary }]}>{opt.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
       {editing ? (
         <View style={styles.form}>
           <TextField label="Full name" value={name} onChangeText={setName} testID="profile-name-input" />
@@ -241,6 +305,20 @@ const styles = StyleSheet.create({
   runStatTile: { flex: 1, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, paddingVertical: spacing.lg, alignItems: "center", gap: spacing.xs, borderWidth: 1, borderColor: colors.border },
   runStatValue: { color: colors.onSurface, fontFamily: fonts.display, fontSize: 30 },
   runStatLabel: { color: colors.onSurfaceTertiary, fontFamily: fonts.bodyMedium, fontSize: font.sm, textTransform: "uppercase" },
+  sectionHeading: { color: colors.onSurface, fontFamily: fonts.displaySemi, fontSize: font.xl, marginBottom: spacing.md },
+  pbSection: { paddingHorizontal: spacing.lg, marginBottom: spacing.lg },
+  pbRow: { flexDirection: "row", gap: spacing.md },
+  pbCard: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
+  pbIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },
+  pbValue: { color: colors.onSurface, fontFamily: fonts.displaySemi, fontSize: font.xl },
+  pbLabel: { color: colors.onSurfaceTertiary, fontFamily: fonts.body, fontSize: font.sm },
+  reminderSection: { paddingHorizontal: spacing.lg, marginBottom: spacing.lg },
+  reminderSub: { color: colors.onSurfaceTertiary, fontFamily: fonts.body, fontSize: font.sm, marginTop: -spacing.sm, marginBottom: spacing.md },
+  reminderRow: { flexDirection: "row", gap: spacing.md },
+  reminderPill: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, height: 48, borderRadius: radius.md, borderWidth: 1 },
+  reminderOn: { backgroundColor: colors.brand, borderColor: colors.brand },
+  reminderOff: { backgroundColor: colors.surfaceSecondary, borderColor: colors.border },
+  reminderText: { fontFamily: fonts.bodySemi, fontSize: font.base },
   form: { paddingHorizontal: spacing.lg, gap: spacing.md },
   editActions: { flexDirection: "row", gap: spacing.md, marginTop: spacing.sm },
   info: { paddingHorizontal: spacing.lg, gap: spacing.md },

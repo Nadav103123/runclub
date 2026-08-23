@@ -45,6 +45,13 @@ Build a mobile-first social running community app "Stride Tribe" enabling runner
 - [x] 37/37 backend tests pass; hardening applied (regex escape, auth-gate push, reminder flag ordering)
 - NOTE: Push delivery requires deploy + native build + Firebase `google-services.json` (not testable in Expo Go/preview)
 
+## Implemented — Iteration 3 (2026-06)
+- [x] Search By Vibe: `/api/groups?search=` matches name, city, category, and description
+- [x] Reminder Timing: per-runner `reminder_prefs` (day-before `1d` / hour-before `1h`); scheduler honors prefs with two lead windows + `reminders_sent` dedupe collection; Profile toggles persist
+- [x] Personal Bests: `/api/my/stats` returns `longest_km` + `best_pace`; Profile "Personal Bests" tiles
+- [x] Hardening: reminder_prefs whitelist validation, unique index on reminders_sent
+- [x] 51/52 backend tests pass (1 stale iter-2 push test needs auth header — not a regression)
+
 ## Backlog
 ### P1
 - Push notifications for session reminders & join approvals (native build only)

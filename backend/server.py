@@ -42,7 +42,7 @@ _storage_key = None
 PUSH_BASE_URL = "https://integrations.emergentagent.com"
 PUSH_KEY = os.environ.get("EMERGENT_PUSH_KEY", "placeholder")
 _push_client = httpx.AsyncClient(base_url=PUSH_BASE_URL, headers={"X-Push-Key": PUSH_KEY}, timeout=10.0)
-REMINDER_LEAD_MINUTES = 60  # nudge going runners ~1h before a session
+REMINDER_WINDOWS = {"1d": 1440, "1h": 60}  # per-user opt-in lead times (minutes)
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -105,6 +105,7 @@ class ProfileUpdate(BaseModel):
     location: Optional[str] = None
     pace_min_km: Optional[str] = None
     avatar_url: Optional[str] = None
+    reminder_prefs: Optional[List[str]] = None
 
 
 class GroupCreate(BaseModel):
@@ -168,6 +169,7 @@ def public_user(u: dict) -> dict:
         "bio": u.get("bio", ""),
         "location": u.get("location", ""),
         "pace_min_km": u.get("pace_min_km", ""),
+        "reminder_prefs": u.get("reminder_prefs", ["1d", "1h"]),
     }
 
 
@@ -200,6 +202,7 @@ async def register(body: RegisterIn):
         "bio": "",
         "location": "",
         "pace_min_km": "",
+        "reminder_prefs": ["1d", "1h"],
         "created_at": now_iso(),
     }
     await db.users.insert_one(user)
@@ -222,6 +225,8 @@ async def me(user: dict = Depends(get_current_user)):
 @api_router.put("/auth/profile")
 async def update_profile(body: ProfileUpdate, user: dict = Depends(get_current_user)):
     updates = {k: v for k, v in body.dict().items() if v is not None}
+    if "reminder_prefs" in updates:
+        updates["reminder_prefs"] = [p for p in updates["reminder_prefs"] if p in REMINDER_WINDOWS]
     if updates:
         await db.users.update_one({"id": user["id"]}, {"$set": updates})
     fresh = await db.users.find_one({"id": user["id"]})
@@ -618,37 +623,59 @@ async def send_push(recipients: list, data: dict, idempotency_key=None):
 
 
 async def reminder_scheduler():
-    """Background loop: send a push ~REMINDER_LEAD_MINUTES before a session to 'going' runners."""
+    """Background loop: send day-before and/or hour-before pushes based on each runner's preference."""
     await asyncio.sleep(10)
     while True:
         try:
             now = datetime.now(timezone.utc)
-            window_end = now + timedelta(minutes=REMINDER_LEAD_MINUTES)
+            horizon = now + timedelta(minutes=1441)
             upcoming = await db.workouts.find({
-                "workout_date": {"$gte": now.isoformat(), "$lte": window_end.isoformat()},
-                "reminder_sent": {"$ne": True},
-            }).to_list(200)
+                "workout_date": {"$gt": now.isoformat(), "$lte": horizon.isoformat()},
+            }).to_list(500)
             for w in upcoming:
+                try:
+                    start = datetime.fromisoformat(w["workout_date"])
+                except Exception:
+                    continue
+                mins_until = (start - now).total_seconds() / 60.0
                 going = await db.rsvps.find({"workout_id": w["id"], "status": "going"}).to_list(500)
-                recipients = [r["user_id"] for r in going]
-                sent_ok = True
-                if recipients:
-                    g = await db.groups.find_one({"id": w["group_id"]})
+                if not going:
+                    continue
+                g = await db.groups.find_one({"id": w["group_id"]})
+                for key, lead in REMINDER_WINDOWS.items():
+                    if mins_until > lead:
+                        continue
+                    if key == "1d" and mins_until <= 60:
+                        continue  # the hour-before reminder will cover it
+                    recipients = []
+                    for r in going:
+                        u = await db.users.find_one({"id": r["user_id"]})
+                        prefs = (u or {}).get("reminder_prefs", ["1d", "1h"])
+                        if key not in prefs:
+                            continue
+                        already = await db.reminders_sent.find_one(
+                            {"workout_id": w["id"], "user_id": r["user_id"], "window": key})
+                        if already:
+                            continue
+                        recipients.append(r["user_id"])
+                    if not recipients:
+                        continue
+                    label = "tomorrow" if key == "1d" else "starts soon"
                     try:
                         await send_push(
                             recipients=recipients,
                             data={
-                                "title": f"🏃 {w['title']} starts soon",
+                                "title": f"🏃 {w['title']} {label}",
                                 "message": f"{(g or {}).get('name', 'Your run')} · Meet at {w['meeting_point_name']}",
                                 "action_url": f"/workout/{w['id']}",
                             },
-                            idempotency_key=f"remind-{w['id']}",
+                            idempotency_key=f"remind-{w['id']}-{key}",
                         )
+                        for uid in recipients:
+                            await db.reminders_sent.insert_one(
+                                {"workout_id": w["id"], "user_id": uid, "window": key, "sent_at": now_iso()})
                     except Exception as e:
-                        sent_ok = False
-                        logger.warning(f"Reminder push failed: {e}")
-                if sent_ok:
-                    await db.workouts.update_one({"id": w["id"]}, {"$set": {"reminder_sent": True}})
+                        logger.warning(f"Reminder push failed ({key}): {e}")
         except Exception as e:
             logger.warning(f"Reminder scheduler error: {e}")
         await asyncio.sleep(60)
@@ -664,12 +691,21 @@ async def my_stats(user: dict = Depends(get_current_user)):
     total_km = 0.0
     total_runs = 0
     upcoming = 0
+    longest_km = 0.0
+    best_pace_secs = None
     weeks = set()
     if wids:
         completed = await db.workouts.find({"id": {"$in": wids}, "workout_date": {"$lte": now_s}}).to_list(2000)
         for w in completed:
             total_runs += 1
-            total_km += float(w.get("distance_km") or 0)
+            dist = float(w.get("distance_km") or 0)
+            total_km += dist
+            if dist > longest_km:
+                longest_km = dist
+            for mm, ss in re.findall(r"(\d+):(\d{2})", w.get("target_pace") or ""):
+                secs = int(mm) * 60 + int(ss)
+                if best_pace_secs is None or secs < best_pace_secs:
+                    best_pace_secs = secs
             try:
                 d = datetime.fromisoformat(w["workout_date"])
                 iso = d.isocalendar()
@@ -693,6 +729,8 @@ async def my_stats(user: dict = Depends(get_current_user)):
         "total_runs": total_runs,
         "streak_weeks": streak,
         "upcoming": upcoming,
+        "longest_km": round(longest_km, 1),
+        "best_pace": f"{best_pace_secs // 60}:{best_pace_secs % 60:02d}" if best_pace_secs else None,
     }
 
 
@@ -801,6 +839,7 @@ async def startup():
         await db.users.create_index("email", unique=True)
         await db.memberships.create_index([("group_id", 1), ("user_id", 1)])
         await db.rsvps.create_index([("workout_id", 1), ("user_id", 1)])
+        await db.reminders_sent.create_index([("workout_id", 1), ("user_id", 1), ("window", 1)], unique=True)
         await seed()
         await seed_past_runs()
     except Exception as e:

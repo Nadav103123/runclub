@@ -1,0 +1,49 @@
+{
+  "summary": "Iteration 3 review of Stride Tribe: 2 new features + regression. Backend: 15/15 iteration-3 pytest PASSED (100%). Also ran full regression suite: 51/52 PASSED — the 1 failure is expected (iteration-2 test test_register_push_controlled_error predates the auth-gating that was added in iteration 3; endpoint now correctly returns 401 without a token, which is the intended behavior). Verified: (1) reminder_prefs is in RegisterIn defaults ['1d','1h'] for new registrations; GET /api/auth/me returns reminder_prefs; PUT /api/auth/profile {reminder_prefs:['1h']} persists and is echoed back; setting [] is allowed and persisted (no min-length constraint). (2) GET /api/my/stats now returns longest_km=18.0 and best_pace='4:00' for demo, and longest_km=0.0 + best_pace=null for a fresh user. (3) Regression: total_km=41.0, total_runs=4, streak_weeks>=1 for demo; ?search=oakland (city vibe), search=marathon (category vibe), search=headlands (description vibe) all return matching groups; /register-push now returns 401 without auth and a controlled 500/502 with placeholder key when authed; workout create+rsvp+delete flow unaffected. Frontend (390x844 mobile): Profile shows PERSONAL BESTS tiles (Longest Run '18 km', Best Pace '4:00' min/km) and RUN REMINDERS toggles (Day before / Hour before). Tapping the '1d' pill toggles OFF (background switches from brand-orange to surfaceSecondary), and the state persists across a full page reload — the backend PUT succeeds and /auth/me returns the updated array. Tapping again restores it. No red-screen errors. Console warnings still show deprecated RN-Web props ('shadow*', 'props.pointerEvents') — pre-existing, non-blocking.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/auth/profile", "issue": "reminder_prefs values are not validated against the REMINDER_WINDOWS whitelist. A client can PUT {reminder_prefs: ['bogus','5m']} and it will be persisted verbatim; the scheduler will silently ignore unknown keys but /auth/me will return the junk. Consider filtering to REMINDER_WINDOWS.keys() or rejecting with 400."},
+      {"endpoint": "reminder_scheduler", "issue": "The dedupe collection db.reminders_sent is never indexed; every 60s the scheduler does N per-user find_one lookups on {workout_id,user_id,window}. Add an index on ('workout_id','user_id','window') to keep the loop fast as data grows."},
+      {"endpoint": "GET /api/groups?search", "issue": "(carried from iter-2) search parameter is now correctly escaped with re.escape() — verified fixed."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "profile", "issues": ["reminderSub uses marginTop: -spacing.sm — negative margin hack to visually tighten the subtitle under the heading. Works but is fragile if sectionHeading marginBottom changes. Prefer explicit spacing."]},
+      {"screen": "global", "issues": ["Pre-existing RN-Web warnings: 'shadow*' → boxShadow, 'props.pointerEvents' → style.pointerEvents. Non-blocking."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_3.py",
+    "/app/backend/tests/test_iteration_2.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/iteration_3_results.xml"
+  ],
+  "action_items": [
+    "(LOW/optional) Validate reminder_prefs values against REMINDER_WINDOWS in ProfileUpdate — either filter unknown keys or return 400 to prevent junk from being stored.",
+    "(LOW/optional) Add a compound index on db.reminders_sent (workout_id,user_id,window) — the scheduler polls every 60s and this table grows with usage.",
+    "(HOUSEKEEPING) Update /app/backend/tests/test_iteration_2.py::TestRegisterPush::test_register_push_controlled_error to send Authorization header (iter-3 correctly auth-gated /register-push); the assertion currently expects 500/502 but now sees 401. Easy fix — add the demo/new_user headers fixture.",
+    "(Pre-existing) Migrate RN-Web deprecated 'shadow*' and 'props.pointerEvents' props."
+  ],
+  "critical_code_review_comments": [
+    "server.py: public_user() defaults reminder_prefs to ['1d','1h'] when the field is missing — safe for any pre-iter-3 seeded users.",
+    "server.py: /my/stats parses target_pace with re.findall(r'(\\d+):(\\d{2})', ...) — correctly picks the FASTEST pace across ranges like '4:00 - 4:30' (both 4:00 and 4:30 are scanned; min wins). Verified against demo (best=4:00 from Interval Session).",
+    "server.py: reminder_scheduler correctly skips '1d' when mins_until <= 60 to avoid a duplicate nudge with '1h'.",
+    "server.py: reminders_sent dedupe uses per-(workout,user,window) records — good, replaces the flawed reminder_sent flag from iter-2. However inserts happen even if send_push succeeded for some recipients and failed for others (still logged as sent for everyone in the chunk); acceptable for MVP.",
+    "server.py: /register-push is now auth-gated (Depends(get_current_user)) and derives user_id from JWT — addresses the iter-2 action item.",
+    "profile.tsx: reminder toggle calls PUT /auth/profile with the entire new array; correctly updates local user via setUser(updated) so UI reflects immediately. Errors are swallowed silently — consider a toast on failure.",
+    "profile.tsx: PERSONAL BESTS section is gated on stats.total_runs>0, so new users see only the Run Stats row (zeros) and no empty PB cards — good UX.",
+    "profile.tsx: file size ~340 lines — within limits."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration_3.py (created)"],
+  "success_rate": {"backend": "100% (15/15 iter-3; 51/52 full suite — 1 known-stale iter-2 test)", "frontend": "100%"},
+  "seed_data_creation": "No new seed data introduced. Cleaned up 1 leftover 'TEST Group b7bb10' + its workout+memberships from an earlier iteration to restore the discover feed to exactly 5 seeded groups (as requested in the context note). All test-created workouts/rsvps deleted at test end.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend base URL: EXPO_PUBLIC_BACKEND_URL from /app/frontend/.env. Demo: demo@stridetribe.com/Password123. Iter-3 pytest at /app/backend/tests/test_iteration_3.py. Key frontend testIDs added this iteration: reminder-toggle-1d, reminder-toggle-1h. Personal Bests tiles do not have dedicated testIDs — selected by 'Longest Run' / 'Best Pace min/km' label text. Push delivery cannot be exercised (placeholder EMERGENT_PUSH_KEY) — verify only endpoint contracts, not actual delivery.",
+  "rca_of_issue": "N/A — all iteration-3 acceptance criteria met."
+}
