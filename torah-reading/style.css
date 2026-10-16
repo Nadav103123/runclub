@@ -3,9 +3,11 @@
   --accent: #1f5f8b; --accent-ink: #fff; --stop: #b4432c; --serve: #1d7a5a; --now: #ffe08a; --sel: #d6e8f5;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #17140f; --card: #211d17; --ink: #f1ebdf; --muted: #a79d8c; --line: #3a3328;
-    --accent: #6db3e3; --accent-ink: #0b1620; --stop: #ee8a73; --serve: #6fd1a8; --now: #5b4a14; --sel: #26425a; }
+  :root:not([data-theme="light"]) { --bg: #17140f; --card: #211d17; --ink: #f1ebdf; --muted: #a79d8c; --line: #3a3328;
+    --accent: #6db3e3; --accent-ink: #0b1620; --stop: #ee8a73; --serve: #6fd1a8; --now: #5b4a14; --sel: #26425a;  color-scheme: dark; }
 }
+:root[data-theme="dark"] { --bg: #17140f; --card: #211d17; --ink: #f1ebdf; --muted: #a79d8c; --line: #3a3328;
+    --accent: #6db3e3; --accent-ink: #0b1620; --stop: #ee8a73; --serve: #6fd1a8; --now: #5b4a14; --sel: #26425a;  color-scheme: dark; }
 * { box-sizing: border-box; }
 html { font-size: 17px; }
 body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Heebo', system-ui, sans-serif; line-height: 1.6; }
@@ -64,7 +66,7 @@ select { background: var(--card); border: 1px solid var(--line); border-radius: 
 .refs { padding-inline-start: 1.2em; } .refs li { margin-bottom: 6px; }
 .refs a { color: var(--accent); font-weight: 500; }
 
-.word-panel { position: fixed; z-index: 10; inset-inline: 12px; bottom: 12px; max-width: 460px; margin-inline: auto; background: var(--card); border: 1px solid var(--accent); border-radius: 14px; padding: 14px 16px; box-shadow: 0 8px 28px rgba(0,0,0,.2); }
+.word-panel { position: fixed; z-index: 10; inset-inline: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); max-width: 460px; margin-inline: auto; background: var(--card); border: 1px solid var(--accent); border-radius: 14px; padding: 14px 16px; box-shadow: 0 8px 28px rgba(0,0,0,.2); }
 .word-panel .x { position: absolute; inset-inline-start: 8px; top: 4px; background: none; border: 0; font-size: 1.6rem; color: var(--muted); }
 .wp-word { font-family: 'Noto Serif Hebrew', serif; font-size: 2rem; }
 .wp-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 8px; }
