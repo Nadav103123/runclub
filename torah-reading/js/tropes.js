@@ -31,14 +31,26 @@ window.MOTIFS = {
 };
 
 window.TropePlayer = (function () {
-  let ctx = null, master = null, timers = [], playing = false;
+  let ctx = null, master = null, timers = [], playing = false, gen = 0;
+
+  let silent = null;
+  // ב-iOS צליל Web Audio מושתק כשמתג השקט פעיל, אלא אם מנגנים גם אלמנט audio.
+  function unlockIOS() {
+    try {
+      if (!silent) {
+        silent = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=');
+        silent.loop = true;
+      }
+      const r = silent.play(); if (r && r.catch) r.catch(() => {});
+    } catch (e) { /* noop */ }
+  }
 
   function ensureCtx() {
     if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
-    if (ctx.state === 'suspended') ctx.resume();
     master = ctx.createGain();
-    master.gain.value = 0.5;
+    master.gain.value = 0.8;
     master.connect(ctx.destination);
+    return ctx.state === 'suspended' ? ctx.resume() : Promise.resolve();
   }
 
   function note(freq, start, dur) {
@@ -88,6 +100,7 @@ window.TropePlayer = (function () {
   }
 
   function stop() {
+    gen++;
     timers.forEach(clearTimeout); timers = [];
     if (master) { try { master.gain.value = 0; master.disconnect(); } catch (e) { /* noop */ } }
     playing = false;
@@ -96,8 +109,13 @@ window.TropePlayer = (function () {
   // words: [{word, key}] ; opts: {tempo, tonic, onWord(key), onEnd()}
   function play(words, opts) {
     stop();
-    ensureCtx();
+    unlockIOS();
     playing = true;
+    const my = ++gen;
+    ensureCtx().then(() => { if (my === gen && playing) schedule(words, opts); });
+  }
+
+  function schedule(words, opts) {
     const beat = 0.34 / (opts.tempo || 1);
     const tonic = opts.tonic || 196;
     let cursor = ctx.currentTime + 0.15;

@@ -187,6 +187,23 @@
     });
   }
 
+  // הקראה בדיבור (בלי מנגינה) בעזרת הקול של המכשיר
+  function speak(text, onEnd) {
+    if (!('speechSynthesis' in window)) { $('#speakBtn').textContent = 'ההקראה לא נתמכת במכשיר'; return; }
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'he-IL'; u.rate = 0.8;
+    u.onend = u.onerror = () => onEnd && onEnd();
+    speechSynthesis.speak(u);
+  }
+  function toggleSpeak() {
+    const b = $('#speakBtn');
+    if (speechSynthesis.speaking) { speechSynthesis.cancel(); b.textContent = '🗣 הקראה בדיבור'; return; }
+    TropePlayer.stop(); resetPlayBtn();
+    b.textContent = '⏹ עצור';
+    speak(versesOf(currentAliyah()).map(v => v.w.map(w => w.n).join(' ')).join('. '), () => { b.textContent = '🗣 הקראה בדיבור'; });
+  }
+
   // ---------- שינון ----------
   function maskFor(a, level, fresh) {
     const k = a.n + ':' + level;
@@ -342,9 +359,12 @@
   };
   $('#newMask').onclick = () => renderPractice(true);
   $('#playBtn').onclick = togglePlay;
+  $('#speakBtn').onclick = toggleSpeak;
   $('#quizNext').onclick = nextQuestion;
   $('#resetProgress').onclick = () => {
-    if (!confirm('למחוק את כל ההתקדמות?')) return;
+    const btn = $('#resetProgress');
+    if (!btn.dataset.sure) { btn.dataset.sure = '1'; btn.textContent = 'לחץ שוב כדי למחוק הכול'; return; }
+    delete btn.dataset.sure; btn.textContent = 'איפוס התקדמות';
     state.known = {}; state.quiz = { ok: 0, total: 0, perTrope: {} };
     store.set('known', state.known); store.set('quiz', state.quiz);
     renderProgress();
