@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>עולים לתורה – חיי שרה</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&family=Noto+Serif+Hebrew:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1>עולים לתורה</h1>
+    <p>פרשת חיי שרה · נוסח אשכנזי · אב טיפוס</p>
+  </div>
+  <nav class="tabs" id="mainTabs">
+    <button data-view="learn" class="on">לימוד</button>
+    <button data-view="practice">שינון</button>
+    <button data-view="quiz">בוחן טעמים</button>
+    <button data-view="progress">התקדמות</button>
+  </nav>
+</header>
+
+<div class="draft-banner">גרסת ניסיון: התוכן ומנגינת ההדגמה עדיין לא אושרו על ידי רב או חזן.</div>
+
+<nav class="aliyot" id="aliyot" aria-label="עליות"></nav>
+
+<main>
+  <!-- לימוד -->
+  <section id="view-learn" class="view on">
+    <div class="toolbar">
+      <div class="seg" id="modeSeg" role="group" aria-label="מצב תצוגה">
+        <button data-mode="t" class="on">עם טעמים</button>
+        <button data-mode="n">עם ניקוד</button>
+        <button data-mode="b">כמו בספר תורה</button>
+      </div>
+      <div class="player">
+        <button id="playBtn" class="primary">▶ שמע את העלייה</button>
+        <label>מהירות <input id="tempo" type="range" min="0.6" max="1.4" step="0.1" value="1"></label>
+        <label>גובה
+          <select id="tonic">
+            <option value="165">נמוך</option>
+            <option value="196" selected>בינוני</option>
+            <option value="233">גבוה</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <p class="hint">לחץ על מילה כדי לראות את שם הטעם. הצבע מראה אם הטעם מפסיק או משרת.</p>
+    <div id="learnBody"></div>
+  </section>
+
+  <!-- שינון -->
+  <section id="view-practice" class="view">
+    <div class="toolbar">
+      <div class="seg" id="levelSeg" role="group" aria-label="רמת קושי">
+        <button data-level="0.25" class="on">קל (רבע מהמילים חסרות)</button>
+        <button data-level="0.5">בינוני (חצי)</button>
+        <button data-level="1">קשה (הכול מהזיכרון)</button>
+      </div>
+      <button id="newMask">ערבב מחדש</button>
+    </div>
+    <p class="hint">הטקסט מוצג בלי ניקוד, כמו בספר תורה. לחץ על ריבוע כדי לגלות את המילה, ואז סמן "שיננתי" כשאתה מוכן.</p>
+    <div id="practiceBody"></div>
+  </section>
+
+  <!-- בוחן -->
+  <section id="view-quiz" class="view">
+    <div class="quiz-card">
+      <div class="quiz-meta"><span id="quizScore">0 / 0</span><span id="quizStreak"></span></div>
+      <p class="quiz-q">איזה טעם נמצא על המילה המסומנת?</p>
+      <div class="quiz-verse" id="quizVerse"></div>
+      <div class="quiz-opts" id="quizOpts"></div>
+      <div class="quiz-feedback" id="quizFeedback"></div>
+      <button id="quizNext" class="primary" hidden>השאלה הבאה</button>
+    </div>
+  </section>
+
+  <!-- התקדמות -->
+  <section id="view-progress" class="view">
+    <div id="progressBody"></div>
+    <button id="resetProgress" class="ghost">איפוס התקדמות</button>
+  </section>
+</main>
+
+<aside id="wordPanel" class="word-panel" hidden aria-live="polite"></aside>
+
+<footer>
+  <p>הטקסט: תנ"ך עם טעמי המקרא (נחלת הכלל), מתוך מאגר <a href="https://www.sefaria.org" target="_blank" rel="noopener">ספריא</a>. הפניות לפסוקים נפתחות באתר ספריא.</p>
+</footer>
+
+<script src="data/chayei-sarah.js"></script>
+<script src="data/content.js"></script>
+<script src="js/tropes.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
